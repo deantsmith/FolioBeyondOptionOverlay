@@ -18,6 +18,7 @@ Usage:
 
 import argparse
 import sys
+import json
 from pathlib import Path
 from datetime import datetime, date
 
@@ -40,11 +41,14 @@ class PortfolioManager:
     def __init__(self, data_dir: str = "."):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize stores
         self.positions = PositionStore(self.data_dir / "positions.json")
         self.market = MarketDataStore(self.data_dir / "market_data.json")
-        
+
+        # Portfolio NAV for position sizing
+        self.nav = self._load_nav()
+
         # Initialize monitor with default exit rules
         self.exit_rules = ExitRuleConfig(
             profit_target_pct=0.50,
@@ -52,13 +56,49 @@ class PortfolioManager:
             dte_threshold=7
         )
         self.monitor = PositionMonitor(self.positions, self.market, self.exit_rules)
-    
+
+    def _load_nav(self) -> float:
+        """Load portfolio NAV from config file."""
+        nav_file = self.data_dir / "portfolio_nav.json"
+        if nav_file.exists():
+            try:
+                with open(nav_file, 'r') as f:
+                    data = json.load(f)
+                    return data.get('nav')
+            except Exception as e:
+                print(f"Warning: Could not load NAV: {e}")
+        return None
+
+    def _save_nav(self):
+        """Save portfolio NAV."""
+        nav_file = self.data_dir / "portfolio_nav.json"
+        with open(nav_file, 'w') as f:
+            json.dump({
+                'nav': self.nav,
+                'updated': datetime.now().isoformat()
+            }, f, indent=2)
+
     def run(self):
         """Run interactive menu."""
+        # Prompt for NAV if not set
+        if self.nav is None:
+            print("\n" + "=" * 50)
+            print("PORTFOLIO NAV SETUP")
+            print("=" * 50)
+            print("\nFor position sizing recommendations, please enter your portfolio NAV.")
+            nav_input = input("Portfolio NAV (or press Enter to skip): $").strip()
+            if nav_input:
+                try:
+                    self.nav = float(nav_input.replace(',', ''))
+                    self._save_nav()
+                    print(f"\n✓ NAV set to ${self.nav:,.2f}")
+                except ValueError:
+                    print("\nInvalid input. You can set NAV later via menu option 11.")
+
         while True:
             self._print_menu()
             choice = input("\nEnter choice: ").strip()
-            
+
             if choice == '1':
                 self._show_dashboard()
             elif choice == '2':
@@ -79,6 +119,8 @@ class PortfolioManager:
                 self._import_bloomberg()
             elif choice == '10':
                 self._configure_exit_rules()
+            elif choice == '11':
+                self._set_nav()
             elif choice == 'q' or choice == 'Q':
                 print("\nExiting...")
                 break
@@ -100,6 +142,7 @@ class PortfolioManager:
         print("  8. View market data")
         print("  9. Import Bloomberg CSV")
         print(" 10. Configure exit rules")
+        print(" 11. Set portfolio NAV")
         print("  Q. Quit")
     
     def _show_dashboard(self):
@@ -458,6 +501,25 @@ class PortfolioManager:
             
         except ValueError as e:
             print(f"\nError: {e}")
+
+    def _set_nav(self):
+        """Set or update portfolio NAV."""
+        print("\n--- SET PORTFOLIO NAV ---\n")
+
+        if self.nav:
+            print(f"Current NAV: ${self.nav:,.2f}\n")
+
+        nav_input = input("Enter new NAV: $").strip()
+        if not nav_input:
+            print("Cancelled.")
+            return
+
+        try:
+            self.nav = float(nav_input.replace(',', ''))
+            self._save_nav()
+            print(f"\n✓ NAV set to ${self.nav:,.2f}")
+        except ValueError:
+            print("\nError: Invalid NAV")
 
 
 def main():

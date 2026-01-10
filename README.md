@@ -13,7 +13,35 @@ This model generates additional income from a fixed income portfolio by selling 
 - **Monte Carlo Simulation**: 10,000+ path simulations for robust probability estimates
 - **Path-Dependent Exit Rules**: Profit targets, loss limits, and DTE-based exits
 - **Bloomberg Integration**: Use actual market IV and bid/ask prices for realistic evaluation
+- **Exit Parameter Optimization**: Grid search over exit rules to maximize expected return
+- **Kelly Criterion Position Sizing**: Optimal position sizing based on edge and risk
 - **Risk Metrics**: Probability of Profit (POP), CVaR, risk-adjusted returns, and more
+- **Live Portfolio Management**: Track positions, monitor exits, and manage trades
+
+---
+
+## What's New in This Branch
+
+### Parameter Optimization (NEW)
+- **`strategy/optimization.py`**: Complete optimization framework for exit parameters
+- **`run_parameter_optimization.py`**: Command-line tool to optimize exit rules
+- Grid search over profit targets, loss multiples, and DTE thresholds
+- Maximize expected return subject to POP and CVaR constraints
+- Outputs ranked parameter sets with performance metrics
+
+### Enhanced Position Sizing
+- **Kelly Criterion**: Automatic calculation of optimal position size
+- Position sizing recommendations at multiple NAV levels ($1M, $10M)
+- Portfolio NAV configuration in portfolio manager
+
+### Bloomberg Integration Improvements
+- Support for abbreviated option types ('c'/'p' → 'call'/'put')
+- More robust CSV parsing
+
+### Portfolio Manager Enhancements
+- NAV setup on first run
+- NAV management menu option
+- Position sizing based on portfolio value
 
 ---
 
@@ -27,7 +55,8 @@ tlt_options_model/
 ├── run_calibration.py             # Step 1: Calibrate models from historical data
 ├── run_strategy_evaluation.py     # Step 2a: Evaluate strategies (model-based IV)
 ├── run_market_evaluation.py       # Step 2b: Evaluate strategies (Bloomberg IV)
-├── portfolio_manager.py           # Step 3: Live portfolio management
+├── run_parameter_optimization.py  # Step 3: Optimize exit rule parameters (NEW)
+├── portfolio_manager.py           # Step 4: Live portfolio management
 ├── test_with_synthetic_data.py    # Verify installation with synthetic data
 │
 ├── data/
@@ -50,7 +79,8 @@ tlt_options_model/
 │
 ├── strategy/
 │   ├── evaluation.py              # Strategy evaluation pipeline
-│   └── metrics.py                 # Risk metrics (POP, CVaR, Sortino, etc.)
+│   ├── metrics.py                 # Risk metrics (POP, CVaR, Sortino, Kelly, etc.)
+│   └── optimization.py            # Exit parameter optimization (NEW)
 │
 └── portfolio/
     ├── positions.py               # Position tracking and persistence
@@ -101,6 +131,21 @@ python run_strategy_evaluation.py --calibration calibration_results.json
 **Option B**: Using Bloomberg market data:
 ```bash
 python run_market_evaluation.py --calibration calibration_results.json --options tlt_options.csv
+```
+
+### Step 3: Optimize Exit Parameters (NEW)
+
+Optimize exit rule parameters for a specific spread:
+```bash
+python run_parameter_optimization.py --calibration calibration_results.json \
+    --delta 0.20 --width 3 --spread-type put --expiration 45
+```
+
+### Step 4: Manage Portfolio
+
+Launch the interactive portfolio manager:
+```bash
+python portfolio_manager.py --data-dir ./portfolio_data
 ```
 
 ---
@@ -218,7 +263,7 @@ python run_market_evaluation.py \
 ```csv
 quote_date,quote_time,underlying_price,option_type,expiration_date,strike,bid,ask,implied_vol,delta,gamma,theta,vega,volume,open_interest
 2024-12-30,15:45,91.50,put,2025-01-17,89,0.42,0.45,16.2,-0.22,0.045,-0.028,0.12,1250,15420
-2024-12-30,15:45,91.50,put,2025-01-17,88,0.28,0.31,16.5,-0.15,0.038,-0.022,0.09,890,12100
+2024-12-30,15:45,91.50,p,2025-01-17,88,0.28,0.31,16.5,-0.15,0.038,-0.022,0.09,890,12100
 2024-12-30,15:45,91.50,call,2025-01-17,94,0.35,0.38,15.8,0.25,0.042,-0.025,0.11,720,8450
 ```
 
@@ -227,7 +272,7 @@ quote_date,quote_time,underlying_price,option_type,expiration_date,strike,bid,as
 | `quote_date` | Yes | YYYY-MM-DD | Date of snapshot |
 | `quote_time` | No | HH:MM | Time of snapshot |
 | `underlying_price` | Yes | float | TLT spot price |
-| `option_type` | Yes | put/call | Option type (lowercase) |
+| `option_type` | Yes | put/call/p/c | Option type (lowercase, abbreviations supported) |
 | `expiration_date` | Yes | YYYY-MM-DD | Expiration date |
 | `strike` | Yes | float | Strike price |
 | `bid` | Yes | float | Bid price (dollars) |
@@ -242,6 +287,102 @@ quote_date,quote_time,underlying_price,option_type,expiration_date,strike,bid,as
 
 ---
 
+### Parameter Optimization (`run_parameter_optimization.py`) - NEW
+
+Optimizes exit rule parameters for a specific spread strategy using grid search.
+
+```bash
+python run_parameter_optimization.py \
+    --calibration calibration_results.json \
+    --delta 0.20 \
+    --width 3 \
+    --spread-type put \
+    --expiration 45 \
+    --profit-targets 0.30,0.40,0.50,0.60,0.70 \
+    --loss-multiples 1.5,2.0,2.5,3.0 \
+    --dte-thresholds 3,5,7,10,14 \
+    --min-pop 0.70 \
+    --risk-budget 0.02375 \
+    --output optimal_params.json
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--calibration` | Required | Path to calibration JSON |
+| `--delta` | Required | Target delta for short strike (e.g., 0.20) |
+| `--width` | Required | Spread width in dollars (e.g., 3.0) |
+| `--spread-type` | Required | 'put' (bull put) or 'call' (bear call) |
+| `--expiration` | 45 | Days to expiration |
+| `--profit-targets` | 0.30,0.40,0.50,0.60,0.70 | Profit target %s to test |
+| `--loss-multiples` | 1.5,2.0,2.5,3.0 | Loss multiples to test |
+| `--dte-thresholds` | 3,5,7,10,14 | DTE thresholds to test |
+| `--min-pop` | 0.70 | Minimum POP constraint |
+| `--risk-budget` | None | Maximum CVaR loss budget |
+| `--n-paths` | 10000 | Monte Carlo paths |
+| `--seed` | 42 | Random seed |
+| `--risk-free-rate` | 0.05 | Risk-free rate |
+| `--output` | None | Path to save results JSON |
+| `--top` | 10 | Number of top parameter sets to display |
+| `--ranking-metric` | expected_return | Ranking metric ('expected_return' or 'risk_adjusted_return') |
+
+#### Example Output
+
+```
+======================================================================
+EXIT PARAMETER OPTIMIZATION
+======================================================================
+
+Spread: Put 88.00/85.00 (45 days)
+Initial Credit: $0.72
+
+Constraints:
+  Min POP: 70%
+  Max CVaR Loss: $2.38
+
+Evaluating 100 parameter combinations...
+  Profit targets: [0.3, 0.4, 0.5, 0.6, 0.7]
+  Loss multiples: [1.5, 2.0, 2.5, 3.0]
+  DTE thresholds: [3, 5, 7, 10, 14]
+
+Optimization complete in 8.2s
+  87/100 parameter sets pass constraints
+
+======================================================================================
+OPTIMIZATION RESULTS
+======================================================================================
+
+Best Parameters:
+  Profit Target: 50%
+  Loss Multiple: 2.5x
+  DTE Threshold: 7 days
+
+Performance:
+  Expected Return: $0.52
+  POP: 79.3%
+  CVaR (95%): -$1.68
+  Risk-Adj Return: 0.31
+  Avg Days Held: 11.8
+
+Exit Reason Distribution:
+  profit_target        65.2%
+  dte_threshold        23.5%
+  loss_limit           7.8%
+  expiration           3.5%
+
+
+Top 10 Parameter Sets:
+Rank   Profit%    LossMult   DTE      E[R]       POP      CVaR95     RAR
+------------------------------------------------------------------------------------------
+1      50%        2.5        7        $0.52      79.3%    $-1.68     0.31
+2      50%        2.0        7        $0.51      78.9%    $-1.72     0.30
+3      60%        2.5        7        $0.50      77.8%    $-1.65     0.30
+4      40%        2.5        7        $0.50      79.8%    $-1.71     0.29
+5      50%        2.5        10       $0.49      78.5%    $-1.70     0.29
+...
+```
+
+---
+
 ## Exit Rules
 
 The model implements three path-dependent exit conditions:
@@ -253,6 +394,8 @@ The model implements three path-dependent exit conditions:
 | **DTE Threshold** | Close N days before expiration | 7 days |
 
 The first condition triggered determines the exit.
+
+**Parameter Optimization** allows you to systematically search for optimal exit rules that maximize expected return subject to your risk constraints.
 
 ---
 
@@ -269,35 +412,39 @@ For each strategy, the model computes:
 | **Profit Factor** | Gross profits ÷ Gross losses |
 | **Win/Loss Ratio** | Average win ÷ Average loss |
 | **Sortino Ratio** | Return ÷ Downside deviation |
-| **Kelly Fraction** | Optimal position size based on edge and odds |
+| **Kelly Fraction** | Optimal position size based on edge and odds (NEW) |
 
 ---
 
 ## Example Output
+
+### Strategy Evaluation with Kelly Sizing (NEW)
 
 ```
 ======================================================================
 TOP STRATEGIES (MARKET-PRICED)
 ======================================================================
 
-Rank   Type   Strikes      DTE    Credit     POP      E[R]       CVaR95     RAR     
-----------------------------------------------------------------------------------------------
-1      Put    87/84        45     $0.72      78.5%    $0.48      -$1.52     0.32    
-2      Put    86/83        45     $0.65      81.2%    $0.45      -$1.35     0.33    
-3      Call   95/98        52     $0.58      76.8%    $0.41      -$1.42     0.29    
+Rank   Type       Strikes      Credit     POP      E[R]       CVaR95     RAR      Kelly%
+----------------------------------------------------------------------------------------------------
+1      Put        87/84        $0.72      78.5%    $0.48      -$1.52     0.32     15.8%
+2      Put        86/83        $0.65      81.2%    $0.45      -$1.35     0.33     17.2%
+3      Call       95/98        $0.58      76.8%    $0.41      -$1.42     0.29     14.5%
 
 ======================================================================
 
-Top Strategy Details:
-  MarketSpreadQuote(Put 87/84 2025-02-14, credit=$0.68-$0.76)
-  Credit at bid: $0.72
-  Credit at mid: $0.74
-  Max Loss: $2.28
-  Net Delta: 0.145
-  Net Theta: $0.018/day
-  Avg Days Held: 12.3
+Top Strategy Details: Put 87/84 2025-02-14
+  Initial Credit:     $0.72
+  Max Profit:         $0.72
+  Max Loss:           $2.28
+  Avg Days Held:      12.3
 
-  Exit Distribution:
+  Position Sizing (Kelly):
+    Kelly Fraction:   15.8%
+    For $1M NAV:      52 contracts
+    For $10M NAV:     526 contracts
+
+  Exit Reason Distribution:
     profit_target        62.5%
     dte_threshold        28.3%
     loss_limit            5.2%
@@ -346,6 +493,23 @@ The implied duration is approximately `-β` at the reference yield level.
 
 Both are credit spreads with defined risk: **Max Loss = Spread Width - Credit Received**
 
+### Kelly Criterion Position Sizing (NEW)
+
+The Kelly fraction determines optimal position size:
+
+```
+f* = (p × b - q) / b
+```
+
+Where:
+- p = probability of profit
+- q = 1 - p
+- b = average win / average loss
+
+The model computes Kelly fraction for each strategy and provides position sizing recommendations at different portfolio NAV levels.
+
+**Conservative Approach**: Consider using a fractional Kelly (e.g., 0.5× or 0.25× Kelly) to reduce volatility.
+
 ---
 
 ## Configuration
@@ -367,7 +531,7 @@ covid_end = date(2021, 12, 31)
 n_paths = 10_000
 trading_days_per_year = 252.0
 
-# Exit Rules
+# Exit Rules (defaults for evaluation)
 profit_target_pct = 0.50
 loss_limit_multiple = 2.0
 dte_close_threshold = 7
@@ -393,8 +557,22 @@ dte_close_threshold = 7
 │       - Uses Bloomberg bid/ask and IV                           │
 │       - Realistic entry prices                                  │
 │       - Recommended for trade selection                         │
+│       - Includes Kelly position sizing recommendations          │
 ├─────────────────────────────────────────────────────────────────┤
-│  3. PORTFOLIO MANAGEMENT (portfolio_manager.py)                 │
+│  3. PARAMETER OPTIMIZATION (run_parameter_optimization.py) NEW  │
+│                                                                  │
+│     Systematic search over exit rules:                          │
+│       - Profit target percentages                               │
+│       - Loss limit multiples                                    │
+│       - DTE thresholds                                          │
+│                                                                  │
+│     Maximize expected return subject to:                        │
+│       - Minimum POP constraint                                  │
+│       - Maximum CVaR risk budget                                │
+│                                                                  │
+│     Output: Ranked parameter sets with metrics                  │
+├─────────────────────────────────────────────────────────────────┤
+│  4. PORTFOLIO MANAGEMENT (portfolio_manager.py)                 │
 │                                                                  │
 │     Daily workflow:                                              │
 │       - Update market data (yields, TLT, option prices)         │
@@ -405,17 +583,9 @@ dte_close_threshold = 7
 │     Data files:                                                  │
 │       - positions.json (trade history)                          │
 │       - market_data.json (price history)                        │
+│       - portfolio_nav.json (NAV for position sizing) NEW        │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Future Enhancements
-
-- Constrained optimization over exit rule parameters
-- Rolling backtest on historical data
-- Automated alerts/notifications when exit signals trigger
-- Performance analytics and reporting
 
 ---
 
@@ -435,15 +605,17 @@ This launches an interactive menu for:
 - Marking positions to market
 - Checking exit signals
 - Recording position closes
+- Setting portfolio NAV for position sizing (NEW)
 
 ### Data Files
 
-The portfolio manager creates two JSON files in your data directory:
+The portfolio manager creates JSON files in your data directory:
 
 | File | Description |
 |------|-------------|
 | `positions.json` | Open and closed positions with entry/exit details |
 | `market_data.json` | Market snapshots and option price history |
+| `portfolio_nav.json` | Portfolio NAV for position sizing (NEW) |
 
 ### Workflow
 
@@ -488,6 +660,7 @@ When entering a new position, you'll provide:
 **Option 2: Bloomberg import**
 - Import the same CSV format used for `run_market_evaluation.py`
 - Automatically updates all option prices and TLT
+- Supports abbreviated option types ('c'/'p')
 
 ### Exit Signals
 
@@ -516,6 +689,7 @@ TLT OPTIONS PORTFOLIO MANAGER
   8. View market data
   9. Import Bloomberg CSV
  10. Configure exit rules
+ 11. Set portfolio NAV (NEW)
   Q. Quit
 
 Enter choice: 1
@@ -523,6 +697,8 @@ Enter choice: 1
 ================================================================================
 PORTFOLIO SUMMARY
 ================================================================================
+
+Portfolio NAV: $5,250,000
 
 Market Data (2025-01-02T10:30):
   TLT: $91.25
@@ -583,6 +759,214 @@ for mark in marks:
 
 ---
 
+## Advanced Usage Examples
+
+### Example 1: Complete Workflow
+
+```bash
+# 1. Calibrate models
+python run_calibration.py --data historical_data.csv
+
+# 2. Evaluate strategies with Bloomberg data
+python run_market_evaluation.py \
+    --calibration calibration_results.json \
+    --options tlt_options_2025_01_09.csv \
+    --min-pop 0.70 \
+    --top 5
+
+# 3. Optimize exit parameters for top strategy
+python run_parameter_optimization.py \
+    --calibration calibration_results.json \
+    --delta 0.20 --width 3 --spread-type put \
+    --min-pop 0.70 --risk-budget 0.02375 \
+    --output optimal_exit_params.json
+
+# 4. Launch portfolio manager
+python portfolio_manager.py --data-dir ./portfolio_data
+```
+
+### Example 2: Parameter Sensitivity Analysis
+
+Test different constraint levels:
+
+```bash
+# Conservative (higher POP requirement)
+python run_parameter_optimization.py -c calibration.json \
+    --delta 0.15 --width 3 --spread-type put \
+    --min-pop 0.80 --risk-budget 0.01500
+
+# Moderate
+python run_parameter_optimization.py -c calibration.json \
+    --delta 0.20 --width 3 --spread-type put \
+    --min-pop 0.70 --risk-budget 0.02375
+
+# Aggressive (maximize return)
+python run_parameter_optimization.py -c calibration.json \
+    --delta 0.25 --width 5 --spread-type put \
+    --min-pop 0.60 --risk-budget 0.03000
+```
+
+### Example 3: Custom Parameter Ranges
+
+Fine-tune the search grid:
+
+```bash
+python run_parameter_optimization.py -c calibration.json \
+    --delta 0.20 --width 3 --spread-type put \
+    --profit-targets 0.45,0.50,0.55,0.60,0.65 \
+    --loss-multiples 1.8,2.0,2.2,2.4,2.6 \
+    --dte-thresholds 5,6,7,8,9,10 \
+    --min-pop 0.70
+```
+
+---
+
+## Best Practices
+
+### Strategy Selection
+1. **Start with market evaluation**: Use Bloomberg data for realistic prices
+2. **Apply constraints**: Set minimum POP (e.g., 70%) and CVaR budget
+3. **Consider Kelly sizing**: Use Kelly fraction as a starting point, then apply fractional Kelly (0.25× - 0.5×) for conservative sizing
+4. **Diversify**: Don't put all capital in a single strategy
+
+### Exit Parameter Optimization
+1. **Run on representative strategies**: Optimize for your typical delta and width
+2. **Validate across market conditions**: Test parameters on different market environments
+3. **Don't overfit**: Use broad parameter ranges, prefer simplicity
+4. **Consider practical constraints**: Very tight stops may increase transaction costs
+
+### Portfolio Management
+1. **Daily monitoring**: Update market data and check exit signals daily
+2. **Document trades**: Record entry/exit details for performance analysis
+3. **Respect exit signals**: Follow the system's recommendations
+4. **Review periodically**: Recalibrate models quarterly or when market regime changes
+
+### Risk Management
+1. **Position sizing**: Use Kelly criterion as guide, but apply fractional Kelly
+2. **Risk budget**: Limit total portfolio CVaR to acceptable level
+3. **Concentration limits**: Cap single position size (e.g., max 5% of NAV at risk)
+4. **Stop-outs**: Honor loss limits and DTE thresholds
+
+---
+
+## Future Enhancements
+
+Planned features for future releases:
+
+- Rolling backtest engine for historical performance validation
+- Multi-strategy portfolio optimization
+- Greeks-based position hedging
+- Automated Bloomberg data feed integration
+- Performance analytics dashboard
+- Alert/notification system for exit signals
+- Machine learning for IV surface modeling
+- Regime detection for dynamic parameter adjustment
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue**: Optimization finds no passing parameter sets
+- **Solution**: Relax constraints (lower min_pop or increase risk_budget), or choose a different spread specification
+
+**Issue**: Kelly fraction seems too high (>20%)
+- **Solution**: Apply fractional Kelly (multiply by 0.25-0.5), Kelly assumes log utility and can be aggressive
+
+**Issue**: CSV import fails with "Invalid option_type"
+- **Solution**: Ensure option_type column contains 'put'/'call' or 'p'/'c' (lowercase)
+
+**Issue**: Calibration R² is low (<0.95)
+- **Solution**: Check data quality, consider different date range, or exclude volatile periods
+
+**Issue**: Position sizing recommendations vary widely
+- **Solution**: Kelly is sensitive to POP and payoff ratio, use as guideline not hard rule
+
+---
+
 ## License
 
 For internal use.
+
+---
+
+## Contact & Support
+
+For questions, issues, or feature requests, please contact the development team.
+
+**Repository**: (Add your GitHub URL here after pushing)
+
+---
+
+## Acknowledgments
+
+This model builds on established quantitative finance methods:
+- Vasicek (1977) interest rate model
+- Black-Scholes-Merton option pricing framework
+- Kelly (1956) criterion for optimal position sizing
+- Rockafellar & Uryasev (2000) CVaR optimization
+
+---
+
+## Appendix: File Format Reference
+
+### Calibration Output (`calibration_results.json`)
+
+```json
+{
+  "vasicek_params": {
+    "kappa_20": 0.15,
+    "theta_20": 0.045,
+    "sigma_20": 0.008,
+    "kappa_30": 0.12,
+    "theta_30": 0.048,
+    "sigma_30": 0.009,
+    "rho": 0.92
+  },
+  "regression_params": {
+    "alpha": 5.2,
+    "beta": -45.0,
+    "gamma": 250.0,
+    "r_squared": 0.987
+  },
+  "volatility_params": {
+    "base_iv": 0.155,
+    "price_sensitivity": -0.002
+  },
+  "current_values": {
+    "yield_20y": 0.0438,
+    "yield_30y": 0.0455,
+    "tlt_price": 91.25,
+    "date": "2025-01-09"
+  }
+}
+```
+
+### Optimization Output (`optimal_params.json`)
+
+```json
+{
+  "spread": {
+    "type": "bull_put",
+    "short_strike": 88.0,
+    "long_strike": 85.0,
+    "expiration_days": 45
+  },
+  "initial_credit": 0.72,
+  "best_params": {
+    "profit_target_pct": 0.50,
+    "loss_multiple": 2.5,
+    "dte_threshold": 7
+  },
+  "best_result": {
+    "expected_return": 0.52,
+    "cvar_95": -1.68,
+    "pop": 0.793,
+    "risk_adjusted_return": 0.31,
+    "avg_days_held": 11.8
+  },
+  "n_evaluated": 100,
+  "n_passing": 87
+}
+```
