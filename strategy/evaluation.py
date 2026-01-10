@@ -110,7 +110,8 @@ class StrategyCandidate:
     pop: float = 0.0
     cvar_95: float = 0.0
     risk_adjusted_return: float = 0.0
-    
+    kelly_fraction: float = 0.0
+
     # Ranking
     rank: int = 0
     passes_constraints: bool = True
@@ -118,17 +119,22 @@ class StrategyCandidate:
     
     def compute_metrics(self):
         """Compute strategy metrics from simulation results."""
+        from strategy.metrics import kelly_criterion
+
         stats = self.simulation_result.stats
-        
+
         self.expected_return = stats['expected_value']
         self.pop = stats['pop']
         self.cvar_95 = stats['cvar_95']
-        
+
         # Risk-adjusted return: expected return / |CVaR|
         if abs(self.cvar_95) > 0.01:
             self.risk_adjusted_return = self.expected_return / abs(self.cvar_95)
         else:
             self.risk_adjusted_return = float('inf') if self.expected_return > 0 else 0
+
+        # Kelly fraction for position sizing
+        self.kelly_fraction = kelly_criterion(self.simulation_result.pnls)
 
 
 @dataclass 
@@ -156,6 +162,28 @@ class EvaluationConfig:
     
     # Exit rules
     exit_rules: ExitRules = field(default_factory=ExitRules)
+
+
+def _kelly_contracts(candidate: StrategyCandidate, nav: float) -> int:
+    """
+    Calculate number of contracts based on Kelly criterion.
+
+    Parameters
+    ----------
+    candidate : StrategyCandidate
+        Strategy candidate with Kelly fraction computed.
+    nav : float
+        Portfolio net asset value.
+
+    Returns
+    -------
+    int
+        Recommended number of contracts.
+    """
+    kelly_capital = nav * candidate.kelly_fraction
+    max_loss_per_contract = candidate.spread_quote.definition.width * 100
+    contracts = int(kelly_capital / max_loss_per_contract)
+    return max(1, contracts)
 
 
 class StrategyEvaluator:
@@ -362,34 +390,40 @@ class StrategyEvaluator:
         
         # Header
         print(f"\n{'Rank':<6} {'Type':<10} {'Strikes':<12} {'Credit':<10} "
-              f"{'POP':<8} {'E[R]':<10} {'CVaR95':<10} {'RAR':<8}")
-        print("-" * 90)
-        
+              f"{'POP':<8} {'E[R]':<10} {'CVaR95':<10} {'RAR':<8} {'Kelly%':<8}")
+        print("-" * 100)
+
         for c in top:
             spread = c.spread_quote.definition
             spread_type = "Put" if spread.is_put_spread else "Call"
             strikes = f"{spread.short_strike}/{spread.long_strike}"
-            
+
             print(f"{c.rank:<6} {spread_type:<10} {strikes:<12} "
                   f"${c.spread_quote.net_credit:<9.2f} "
                   f"{c.pop:<7.1%} "
                   f"${c.expected_return:<9.2f} "
                   f"${c.cvar_95:<9.2f} "
-                  f"{c.risk_adjusted_return:<7.2f}")
-        
-        print("=" * 90)
+                  f"{c.risk_adjusted_return:<7.2f} "
+                  f"{c.kelly_fraction:<7.1%}")
+
+        print("=" * 100)
         
         # Show exit distribution for top candidate
         if top:
             best = top[0]
             stats = best.simulation_result.stats
-            
+
             print(f"\nTop Strategy Details: {best.spread_quote.definition}")
             print(f"  Initial Credit:     ${best.spread_quote.net_credit:.2f}")
             print(f"  Max Profit:         ${stats['max_profit']:.2f}")
             print(f"  Max Loss:           ${stats['max_loss']:.2f}")
             print(f"  Avg Days Held:      {stats['avg_days_held']:.1f}")
-            
+
+            print(f"\n  Position Sizing (Kelly):")
+            print(f"    Kelly Fraction:   {best.kelly_fraction:.1%}")
+            print(f"    For $1M NAV:      {_kelly_contracts(best, 1_000_000)} contracts")
+            print(f"    For $10M NAV:     {_kelly_contracts(best, 10_000_000)} contracts")
+
             print(f"\n  Exit Reason Distribution:")
             for reason, pct in stats['exit_reason_pcts'].items():
                 if pct > 0:

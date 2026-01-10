@@ -199,8 +199,9 @@ def load_bloomberg_chain(
     df['quote_date'] = pd.to_datetime(df['quote_date']).dt.date
     df['expiration_date'] = pd.to_datetime(df['expiration_date']).dt.date
     
-    # Standardize option type
+    # Standardize option type (expand abbreviations)
     df['option_type'] = df['option_type'].str.lower().str.strip()
+    df['option_type'] = df['option_type'].replace({'c': 'call', 'p': 'put'})
     
     # Convert IV from percentage to decimal if needed
     if iv_as_percentage:

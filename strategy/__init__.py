@@ -25,6 +25,16 @@ from .metrics import (
     compare_strategies
 )
 
+from .optimization import (
+    ExitParameterSet,
+    ParameterEvaluationResult,
+    OptimizationConfig,
+    OptimizationResult,
+    ExitParameterOptimizer,
+    save_optimization_result,
+    load_optimization_result
+)
+
 __all__ = [
     # Evaluation
     'CalibratedModel',
@@ -32,7 +42,7 @@ __all__ = [
     'EvaluationConfig',
     'StrategyEvaluator',
     'run_evaluation',
-    
+
     # Metrics
     'probability_of_profit',
     'expected_return',
@@ -47,5 +57,14 @@ __all__ = [
     'RiskMetrics',
     'compute_all_metrics',
     'print_metrics_report',
-    'compare_strategies'
+    'compare_strategies',
+
+    # Optimization
+    'ExitParameterSet',
+    'ParameterEvaluationResult',
+    'OptimizationConfig',
+    'OptimizationResult',
+    'ExitParameterOptimizer',
+    'save_optimization_result',
+    'load_optimization_result'
 ]

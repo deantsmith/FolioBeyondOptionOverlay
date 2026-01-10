@@ -40,12 +40,14 @@ ENV/
 
 # Data files (sensitive/proprietary)
 *.csv
+*.xlsx
 ServerCertificate*
 
 # Generated/runtime files
 calibration_results.json
 positions.json
 market_data.json
+portfolio_data/
 *.zip
 *.pdf
 
