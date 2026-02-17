@@ -30,6 +30,11 @@ from data.bloomberg import (
     MarketSpreadQuote
 )
 from strategy.evaluation import CalibratedModel, EvaluationConfig
+from strategy.recommendation import (
+    apply_constraints,
+    extract_core_metrics,
+    rank_results
+)
 from simulation import run_simulation, simulate_tlt_paths
 from pricing import (
     SpreadType, SpreadDefinition,
@@ -210,30 +215,28 @@ def evaluate_market_spread(
         rules=exit_rules,
         use_fast=True
     )
-    
+
     stats = batch_result.stats
-    
+    expected_return, pop, cvar_95, risk_adjusted_return = extract_core_metrics(
+        batch_result
+    )
+
     results = {
         'spread': spread,
         'initial_credit': initial_credit,
         'max_loss': spread.max_loss_at_bid,
         'n_paths': n_paths,
-        'pop': stats['pop'],
-        'expected_return': stats['expected_value'],
+        'pop': pop,
+        'expected_return': expected_return,
         'std_pnl': stats['std_pnl'],
-        'cvar_95': stats['cvar_95'],
+        'cvar_95': cvar_95,
         'min_pnl': stats['min_pnl'],
         'max_pnl': stats['max_pnl'],
         'avg_days_held': stats['avg_days_held'],
         'exit_reasons': stats['exit_reason_pcts'],
-        'batch_result': batch_result
+        'batch_result': batch_result,
+        'risk_adjusted_return': risk_adjusted_return
     }
-    
-    # Risk-adjusted return
-    if abs(stats['cvar_95']) > 0.01:
-        results['risk_adjusted_return'] = stats['expected_value'] / abs(stats['cvar_95'])
-    else:
-        results['risk_adjusted_return'] = float('inf') if stats['expected_value'] > 0 else 0
     
     if verbose:
         print(f"\n{spread}")
@@ -253,6 +256,7 @@ def run_market_evaluation(
     min_dte: int = 30,
     max_dte: int = 90,
     min_pop: float = 0.70,
+    max_cvar_loss: float = None,
     delta_targets: list = None,
     spread_widths: list = None,
     exit_rules: ExitRules = None,
@@ -275,6 +279,8 @@ def run_market_evaluation(
         DTE range.
     min_pop : float
         Minimum probability of profit.
+    max_cvar_loss : float, optional
+        Maximum acceptable CVaR loss (positive dollars).
     delta_targets : list
         Target deltas for short strikes.
     spread_widths : list
@@ -360,12 +366,29 @@ def run_market_evaluation(
         if verbose and (i + 1) % 10 == 0:
             print(f"  Evaluated {i + 1}/{len(candidates)}")
     
-    # Filter by POP and rank
-    passing = [r for r in results if r['pop'] >= min_pop]
-    passing.sort(key=lambda r: r['risk_adjusted_return'], reverse=True)
+    for result in results:
+        passes, violations = apply_constraints(
+            pop=result['pop'],
+            cvar_95=result['cvar_95'],
+            min_pop=min_pop,
+            max_cvar_loss=max_cvar_loss
+        )
+        result['passes_constraints'] = passes
+        result['constraint_violations'] = violations
+
+    ranked = rank_results(
+        results,
+        get_rar=lambda r: r['risk_adjusted_return'],
+        get_passes=lambda r: r['passes_constraints'],
+        set_rank=lambda r, rank: r.__setitem__('rank', rank)
+    )
+    passing = [r for r in ranked if r['passes_constraints']]
     
     if verbose:
-        print(f"\n{len(passing)}/{len(results)} candidates pass POP >= {min_pop:.0%}")
+        constraint_label = f"POP >= {min_pop:.0%}"
+        if max_cvar_loss is not None:
+            constraint_label += f" and CVaR <= ${max_cvar_loss:.2f}"
+        print(f"\n{len(passing)}/{len(results)} candidates pass {constraint_label}")
     
     # Print top results
     if verbose and passing:
@@ -451,6 +474,12 @@ def main():
         help='Minimum probability of profit (default: 0.70)'
     )
     parser.add_argument(
+        '--max-cvar-loss',
+        type=float,
+        default=None,
+        help='Maximum acceptable CVaR loss in dollars (optional)'
+    )
+    parser.add_argument(
         '--profit-target',
         type=float,
         default=0.50,
@@ -505,6 +534,7 @@ def main():
             min_dte=args.min_dte,
             max_dte=args.max_dte,
             min_pop=args.min_pop,
+            max_cvar_loss=args.max_cvar_loss,
             exit_rules=exit_rules,
             random_seed=args.seed,
             top_n=args.top,

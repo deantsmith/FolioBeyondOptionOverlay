@@ -33,6 +33,11 @@ from pricing import (
     create_spread_by_delta, price_spread,
     ExitRules, simulate_spread_batch, SimulationBatchResult
 )
+from strategy.recommendation import (
+    apply_constraints,
+    extract_core_metrics,
+    rank_results
+)
 
 
 @dataclass
@@ -121,17 +126,12 @@ class StrategyCandidate:
         """Compute strategy metrics from simulation results."""
         from strategy.metrics import kelly_criterion
 
-        stats = self.simulation_result.stats
-
-        self.expected_return = stats['expected_value']
-        self.pop = stats['pop']
-        self.cvar_95 = stats['cvar_95']
-
-        # Risk-adjusted return: expected return / |CVaR|
-        if abs(self.cvar_95) > 0.01:
-            self.risk_adjusted_return = self.expected_return / abs(self.cvar_95)
-        else:
-            self.risk_adjusted_return = float('inf') if self.expected_return > 0 else 0
+        (
+            self.expected_return,
+            self.pop,
+            self.cvar_95,
+            self.risk_adjusted_return
+        ) = extract_core_metrics(self.simulation_result)
 
         # Kelly fraction for position sizing
         self.kelly_fraction = kelly_criterion(self.simulation_result.pnls)
@@ -290,43 +290,25 @@ class StrategyEvaluator:
     
     def check_constraints(self, candidate: StrategyCandidate) -> StrategyCandidate:
         """Check if candidate passes risk constraints."""
-        violations = []
-        
-        # Check POP constraint
-        if candidate.pop < self.config.min_pop:
-            violations.append(
-                f"POP {candidate.pop:.1%} < min {self.config.min_pop:.1%}"
-            )
-        
-        # Check CVaR constraint
-        if self.config.max_cvar_loss is not None:
-            if candidate.cvar_95 < -self.config.max_cvar_loss:
-                violations.append(
-                    f"CVaR ${candidate.cvar_95:.2f} exceeds budget ${-self.config.max_cvar_loss:.2f}"
-                )
-        
-        candidate.passes_constraints = len(violations) == 0
+        passes, violations = apply_constraints(
+            pop=candidate.pop,
+            cvar_95=candidate.cvar_95,
+            min_pop=self.config.min_pop,
+            max_cvar_loss=self.config.max_cvar_loss
+        )
+        candidate.passes_constraints = passes
         candidate.constraint_violations = violations
         
         return candidate
     
     def rank_candidates(self, candidates: List[StrategyCandidate]) -> List[StrategyCandidate]:
         """Rank candidates by risk-adjusted return."""
-        # Filter to those passing constraints
-        passing = [c for c in candidates if c.passes_constraints]
-        failing = [c for c in candidates if not c.passes_constraints]
-        
-        # Sort by risk-adjusted return (descending)
-        passing.sort(key=lambda c: c.risk_adjusted_return, reverse=True)
-        
-        # Assign ranks
-        for i, c in enumerate(passing):
-            c.rank = i + 1
-        
-        for c in failing:
-            c.rank = len(candidates)
-        
-        return passing + failing
+        return rank_results(
+            candidates,
+            get_rar=lambda c: c.risk_adjusted_return,
+            get_passes=lambda c: c.passes_constraints,
+            set_rank=lambda c, rank: setattr(c, "rank", rank)
+        )
     
     def evaluate_strategies(
         self,

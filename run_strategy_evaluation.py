@@ -57,6 +57,12 @@ def main():
         help='Minimum probability of profit (default: 0.70)'
     )
     parser.add_argument(
+        '--max-cvar-loss',
+        type=float,
+        default=None,
+        help='Maximum acceptable CVaR loss in dollars (optional)'
+    )
+    parser.add_argument(
         '--profit-target',
         type=float,
         default=0.50,
@@ -131,6 +137,7 @@ def main():
         spread_widths=[2, 3, 5],
         spread_types=spread_types,
         min_pop=args.min_pop,
+        max_cvar_loss=args.max_cvar_loss,
         exit_rules=exit_rules
     )
     
@@ -146,6 +153,8 @@ def main():
         print(f"  Monte Carlo paths: {args.n_paths:,}")
         print(f"  Expiration days: {args.expiration}")
         print(f"  Min POP: {args.min_pop:.0%}")
+        if args.max_cvar_loss is not None:
+            print(f"  Max CVaR Loss: ${args.max_cvar_loss:.2f}")
         print(f"\nExit Rules:")
         print(f"  {exit_rules}")
     
