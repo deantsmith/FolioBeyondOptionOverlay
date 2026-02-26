@@ -176,10 +176,15 @@ def evaluate_market_spread(
     )
     
     # Convert to TLT paths (using model regression)
+    anchor_price = getattr(spread.short_contract, "underlying_price", None)
+    if anchor_price is None:
+        anchor_price = getattr(iv_surface, "underlying_price", None)
+
     tlt_sim = simulate_tlt_paths(
         rate_sim,
         model.regression_params,
-        model.volatility_params
+        model.volatility_params,
+        anchor_price=anchor_price
     )
     
     # Create market-informed IV paths
@@ -392,25 +397,42 @@ def run_market_evaluation(
     
     # Print top results
     if verbose and passing:
-        print("\n" + "=" * 100)
+        print("\n" + "=" * 130)
         print("TOP STRATEGIES (MARKET-PRICED)")
-        print("=" * 100)
+        print("=" * 130)
+        
+        def format_int(value):
+            if value is None:
+                return "-"
+            try:
+                if np.isnan(value):
+                    return "-"
+            except TypeError:
+                pass
+            try:
+                return f"{int(round(value))}"
+            except (TypeError, ValueError):
+                return "-"
         
         print(f"\n{'Rank':<6} {'Type':<6} {'Strikes':<12} {'DTE':<6} "
-              f"{'Credit':<10} {'POP':<8} {'E[R]':<10} {'CVaR95':<10} {'RAR':<8}")
-        print("-" * 100)
+              f"{'Credit':<10} {'POP':<8} {'E[R]':<10} {'CVaR95':<10} {'RAR':<8} "
+              f"{'Volume':<10} {'OpenInt':<10}")
+        print("-" * 130)
         
         for i, r in enumerate(passing[:top_n]):
             spread = r['spread']
             type_str = "Put" if spread.option_type == 'put' else "Call"
             strikes = f"{spread.short_strike:.0f}/{spread.long_strike:.0f}"
             
+            volume = format_int(spread.short_contract.volume)
+            open_interest = format_int(spread.short_contract.open_interest)
+            
             print(f"{i+1:<6} {type_str:<6} {strikes:<12} {spread.dte:<6} "
                   f"${r['initial_credit']:<9.2f} {r['pop']:<7.1%} "
                   f"${r['expected_return']:<9.2f} ${r['cvar_95']:<9.2f} "
-                  f"{r['risk_adjusted_return']:<7.2f}")
+                  f"{r['risk_adjusted_return']:<7.2f} {volume:<10} {open_interest:<10}")
         
-        print("=" * 100)
+        print("=" * 130)
         
         # Show details of top strategy
         if passing:
