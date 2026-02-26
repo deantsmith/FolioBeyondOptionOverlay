@@ -10,23 +10,15 @@ import pandas as pd
 import sys
 import os
 from datetime import datetime
-import re
 
 
-def extract_date_from_filename(filename):
-    """Extract date from filename pattern TLT_OMON_YYYYMMDD.xlsx"""
-    match = re.search(r'(\d{8})', filename)
-    if match:
-        date_str = match.group(1)
-        return datetime.strptime(date_str, '%Y%m%d').strftime('%Y-%m-%d')
-    return None
-
-
-def get_file_timestamp(filepath):
-    """Get file modification time"""
+def get_file_datetime(filepath):
+    """Extract date and time from file modification timestamp."""
     file_stat = os.stat(filepath)
     file_time = datetime.fromtimestamp(file_stat.st_mtime)
-    return file_time.strftime('%H:%M')
+    quote_date = file_time.strftime('%Y-%m-%d')
+    quote_time = file_time.strftime('%H:%M')
+    return quote_date, quote_time
 
 
 def process_bloomberg_export(input_file, output_file=None, underlying_price=None):
@@ -38,13 +30,8 @@ def process_bloomberg_export(input_file, output_file=None, underlying_price=None
         output_file: Optional output CSV path (defaults to tlt_options_YYYYMMDD.csv)
         underlying_price: Optional underlying price (prompts if not provided)
     """
-    # Extract metadata
-    quote_date = extract_date_from_filename(input_file)
-    quote_time = get_file_timestamp(input_file)
-
-    if not quote_date:
-        print(f"Error: Could not extract date from filename {input_file}")
-        sys.exit(1)
+    # Extract metadata from file modification timestamp
+    quote_date, quote_time = get_file_datetime(input_file)
 
     print(f"Processing: {input_file}")
     print(f"Quote Date: {quote_date}")

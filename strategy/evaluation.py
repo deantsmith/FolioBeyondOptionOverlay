@@ -232,7 +232,8 @@ class StrategyEvaluator:
         self.tlt_simulation = simulate_tlt_paths(
             self.rate_simulation,
             self.model.regression_params,
-            self.model.volatility_params
+            self.model.volatility_params,
+            anchor_price=self.model.current_values['tlt_price']
         )
         
         print(f"  Generated {self.config.n_paths:,} paths over {self.config.expiration_days} days")

@@ -1,0 +1,76 @@
+
+======================================================================
+TLT OPTIONS OVERLAY - STRATEGY EVALUATION
+======================================================================
+
+Configuration:
+  Calibration file: calibration_results.json
+  Monte Carlo paths: 10,000
+  Expiration days: 45
+  Min POP: 70%
+
+Exit Rules:
+  ExitRules(profit≥50%, value≥2.0x credit, DTE≤7)
+
+Model loaded successfully
+  Current TLT: $87.33
+  Base IV: 16.9%
+
+======================================================================
+STRATEGY EVALUATION
+======================================================================
+Running Monte Carlo simulations...
+  Generated 10,000 paths over 45 days
+  Initial TLT: $88.17
+
+Generating spread candidates...
+  Generated 30 spread candidates
+
+Evaluating candidates...
+  Evaluated 10/30 candidates
+  Evaluated 20/30 candidates
+  Evaluated 30/30 candidates
+
+15/30 candidates pass constraints
+
+==========================================================================================
+TOP STRATEGY CANDIDATES
+==========================================================================================
+
+Rank   Type       Strikes      Credit     POP      E[R]       CVaR95     RAR      Kelly%  
+----------------------------------------------------------------------------------------------------
+1      Put        81/76        $0.31      93.0%   $0.14      $-0.48     0.30    25.0%  
+2      Put        81/78        $0.25      92.2%   $0.11      $-0.39     0.28    25.0%  
+3      Put        82/77        $0.43      91.7%   $0.18      $-0.67     0.27    25.0%  
+4      Put        81/79        $0.19      91.6%   $0.08      $-0.30     0.27    25.0%  
+5      Put        82/79        $0.33      90.7%   $0.14      $-0.52     0.26    25.0%  
+6      Put        83/78        $0.58      90.1%   $0.23      $-0.90     0.26    25.0%  
+7      Put        82/80        $0.25      90.1%   $0.10      $-0.40     0.25    25.0%  
+8      Put        84/79        $0.76      88.8%   $0.29      $-1.17     0.25    25.0%  
+9      Put        83/80        $0.44      89.1%   $0.17      $-0.69     0.24    25.0%  
+10     Put        83/81        $0.33      88.6%   $0.12      $-0.52     0.24    25.0%  
+====================================================================================================
+
+Top Strategy Details: BullPutSpread(81/76, 45DTE)
+  Initial Credit:     $0.31
+  Max Profit:         $0.31
+  Max Loss:           $4.69
+  Avg Days Held:      5.2
+
+  Position Sizing (Kelly):
+    Kelly Fraction:   25.0%
+    For $1M NAV:      500 contracts
+    For $10M NAV:     5000 contracts
+
+  Exit Reason Distribution:
+    profit_target        93.0%
+    loss_limit           7.0%
+    dte_threshold        0.0%
+
+15 strategies pass all constraints
+
+Best Strategy: BullPutSpread(81/76, 45DTE)
+  Expected Return: $0.14
+  Probability of Profit: 93.0%
+  CVaR (95%): $-0.48
+  Risk-Adjusted Return: 0.30

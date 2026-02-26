@@ -115,7 +115,8 @@ def convert_yields_to_tlt(
 def simulate_tlt_paths(
     rate_simulation: SimulationResult,
     regression_params: TLTRegressionParams,
-    vol_params: Optional[VolatilityParams] = None
+    vol_params: Optional[VolatilityParams] = None,
+    anchor_price: Optional[float] = None
 ) -> TLTSimulationResult:
     """
     Generate TLT price paths from rate simulation.
@@ -128,6 +129,9 @@ def simulate_tlt_paths(
         TLT regression parameters.
     vol_params : VolatilityParams, optional
         Volatility parameters for IV estimation.
+    anchor_price : float, optional
+        If provided, scales the price paths so the initial price matches
+        this observed value.
         
     Returns
     -------
@@ -139,6 +143,12 @@ def simulate_tlt_paths(
         rate_simulation.paths_avg,
         regression_params
     )
+
+    if anchor_price is not None:
+        model_initial = tlt_paths[0, 0]
+        if abs(model_initial) > 1e-10:
+            scale = anchor_price / model_initial
+            tlt_paths = tlt_paths * scale
     
     # Estimate IV paths if vol params provided
     iv_paths = None

@@ -57,6 +57,12 @@ def main():
         help='Minimum probability of profit (default: 0.70)'
     )
     parser.add_argument(
+        '--spot-price',
+        type=float,
+        default=None,
+        help='Override spot price for TLT (optional)'
+    )
+    parser.add_argument(
         '--max-cvar-loss',
         type=float,
         default=None,
@@ -161,6 +167,9 @@ def main():
     try:
         # Load model
         model = CalibratedModel.from_json(args.calibration)
+
+        if args.spot_price is not None:
+            model.current_values['tlt_price'] = args.spot_price
         
         if verbose:
             print(f"\nModel loaded successfully")

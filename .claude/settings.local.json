@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(cd /Users/deansmith/Library/CloudStorage/GoogleDrive-deantsmith@gmail.com/My\\\\ Drive/Projects/FolioBeyondOptionOverlay && python run_parameter_optimization.py:*)",
+      "Bash(cd:*)",
+      "Bash(timeout 60 python run_parameter_optimization.py -c calibration_results.json --delta 0.20 --width 3 --spread-type put --profit-targets 0.40,0.50 --loss-multiples 1.5,2.0 --dte-thresholds 5,7 --n-paths 1000)",
+      "Bash(cd /Users/deansmith/Library/CloudStorage/GoogleDrive-deantsmith@gmail.com/My\\\\ Drive/Projects/FolioBeyondOptionOverlay && python run_strategy_evaluation.py:*)"
     ]
   }
 }

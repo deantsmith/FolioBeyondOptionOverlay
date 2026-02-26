@@ -61,7 +61,9 @@ March 2020 - December 2021 is excluded from calibration by default. This period 
 | `run_calibration.py` | Calibrate models from historical yield/TLT data |
 | `run_strategy_evaluation.py` | Evaluate strategies with model-estimated IV |
 | `run_market_evaluation.py` | Evaluate strategies with Bloomberg market data |
+| `process_bloomberg_export.py` | Convert Bloomberg OMON exports to normalized options CSV |
 | `portfolio_manager.py` | Interactive CLI for live portfolio management |
+| `workbench_cli.py` | Unified text menu to run project routines and report created files |
 
 ### Data Files
 
@@ -163,6 +165,14 @@ python run_market_evaluation.py --calibration calibration_results.json --options
 ---
 
 ## Common Tasks
+
+### Run the Unified Workbench
+
+```bash
+python workbench_cli.py
+```
+
+The workbench presents a persistent text menu, runs selected routines with guided prompts, reports any file paths created during execution, and then returns to the menu until you quit.
 
 ### Add a New Risk Metric
 

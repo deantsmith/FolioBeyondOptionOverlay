@@ -179,6 +179,7 @@ def _prompt_output_path(default_name: str) -> Optional[str]:
 def build_strategy_eval_args() -> Tuple[List[str], Optional[str]]:
     print("\nStrategy Evaluation Inputs")
     calibration = _prompt_text("Calibration JSON path", "calibration_results.json", required=True)
+    spot_price = _prompt_text("Spot price override (optional)")
     n_paths = _prompt_int("Monte Carlo paths", 10000)
     expiration = _prompt_int("Expiration days", 45)
     min_pop = _prompt_float("Minimum POP", 0.70)
@@ -212,6 +213,8 @@ def build_strategy_eval_args() -> Tuple[List[str], Optional[str]]:
         "--top",
         str(top),
     ]
+    if spot_price:
+        args += ["--spot-price", spot_price]
     if spread_mode == "put":
         args.append("--put-only")
     elif spread_mode == "call":
