@@ -270,6 +270,55 @@ def build_market_eval_args() -> Tuple[List[str], Optional[str]]:
     return args, output_path
 
 
+def build_single_market_spread_args() -> Tuple[List[str], Optional[str]]:
+    print("\nSingle Market Spread Evaluation Inputs")
+    calibration = _prompt_text("Calibration JSON path", "calibration_results.json", required=True)
+    options_file = _prompt_text("Options CSV path", "tlt_options.csv", required=True)
+    spread_type = _prompt_text("Spread type (put/call)", "put", required=True).lower()
+    short_strike = _prompt_float("Short strike", 85.0)
+    long_strike = _prompt_float("Long strike", 83.0)
+    dte = _prompt_int("Target DTE", 45)
+    n_paths = _prompt_int("Monte Carlo paths", 10000)
+    min_pop = _prompt_float("Minimum POP", 0.70)
+    profit_target = _prompt_float("Profit target fraction", 0.50)
+    loss_multiple = _prompt_float("Loss multiple", 2.0)
+    dte_close = _prompt_int("DTE close threshold", 7)
+    seed = _prompt_int("Random seed", 42)
+    quiet = _prompt_yes_no("Quiet mode", False)
+    output_path = _prompt_output_path("single_spread_evaluation_output.txt")
+
+    args = [
+        "run_single_market_spread.py",
+        "--calibration",
+        calibration,
+        "--options",
+        options_file,
+        "--type",
+        spread_type,
+        "--short-strike",
+        str(short_strike),
+        "--long-strike",
+        str(long_strike),
+        "--dte",
+        str(dte),
+        "--n-paths",
+        str(n_paths),
+        "--min-pop",
+        str(min_pop),
+        "--profit-target",
+        str(profit_target),
+        "--loss-multiple",
+        str(loss_multiple),
+        "--dte-close",
+        str(dte_close),
+        "--seed",
+        str(seed),
+    ]
+    if quiet:
+        args.append("--quiet")
+    return args, output_path
+
+
 def build_bloomberg_process_args() -> List[str]:
     print("\nBloomberg Processing Inputs")
     input_file = _prompt_text("Input Bloomberg file path", required=True)
@@ -298,10 +347,11 @@ def print_menu() -> None:
     print("TLT OPTIONS WORKBENCH")
     print("=" * 72)
     print("1) Run calibration")
-    print("2) Run strategy evaluation")
-    print("3) Run market evaluation")
-    print("4) Process Bloomberg export")
+    print("2) Process Bloomberg export")
+    print("3) Run strategy evaluation")
+    print("4) Run market evaluation")
     print("5) Run portfolio manager")
+    print("6) Run single market spread evaluation")
     print("Q) Quit")
 
 
@@ -318,20 +368,24 @@ def main() -> int:
             run_subprocess(args, "Calibration")
             continue
         if choice == "2":
+            args = build_bloomberg_process_args()
+            run_subprocess(args, "Bloomberg Processing")
+            continue
+        if choice == "3":
             args, output_path = build_strategy_eval_args()
             run_subprocess(args, "Strategy Evaluation", output_path)
             continue
-        if choice == "3":
+        if choice == "4":
             args, output_path = build_market_eval_args()
             run_subprocess(args, "Market Evaluation", output_path)
-            continue
-        if choice == "4":
-            args = build_bloomberg_process_args()
-            run_subprocess(args, "Bloomberg Processing")
             continue
         if choice == "5":
             args = build_portfolio_manager_args()
             run_subprocess(args, "Portfolio Manager")
+            continue
+        if choice == "6":
+            args, output_path = build_single_market_spread_args()
+            run_subprocess(args, "Single Market Spread Evaluation", output_path)
             continue
 
         print("Invalid choice. Please select a menu option.")

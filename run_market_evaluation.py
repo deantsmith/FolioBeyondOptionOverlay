@@ -254,6 +254,40 @@ def evaluate_market_spread(
     return results
 
 
+def evaluate_single_market_candidate(
+    spread: MarketSpreadQuote,
+    model: CalibratedModel,
+    iv_surface: IVSurface,
+    n_paths: int,
+    exit_rules: ExitRules,
+    random_seed: int,
+    min_pop: float,
+    max_cvar_loss: float | None
+) -> dict:
+    """
+    Convenience helper to evaluate a single market spread candidate
+    and apply POP / CVaR constraints.
+    """
+    result = evaluate_market_spread(
+        spread=spread,
+        model=model,
+        iv_surface=iv_surface,
+        n_paths=n_paths,
+        exit_rules=exit_rules,
+        random_seed=random_seed,
+        verbose=False
+    )
+    passes, violations = apply_constraints(
+        pop=result['pop'],
+        cvar_95=result['cvar_95'],
+        min_pop=min_pop,
+        max_cvar_loss=max_cvar_loss
+    )
+    result['passes_constraints'] = passes
+    result['constraint_violations'] = violations
+    return result
+
+
 def run_market_evaluation(
     calibration_file: str,
     options_file: str,
@@ -359,27 +393,20 @@ def run_market_evaluation(
     
     results = []
     for i, spread in enumerate(candidates):
-        result = evaluate_market_spread(
-            spread, model, iv_surface,
+        result = evaluate_single_market_candidate(
+            spread=spread,
+            model=model,
+            iv_surface=iv_surface,
             n_paths=n_paths,
             exit_rules=exit_rules,
             random_seed=random_seed,
-            verbose=False
+            min_pop=min_pop,
+            max_cvar_loss=max_cvar_loss
         )
         results.append(result)
         
         if verbose and (i + 1) % 10 == 0:
             print(f"  Evaluated {i + 1}/{len(candidates)}")
-    
-    for result in results:
-        passes, violations = apply_constraints(
-            pop=result['pop'],
-            cvar_95=result['cvar_95'],
-            min_pop=min_pop,
-            max_cvar_loss=max_cvar_loss
-        )
-        result['passes_constraints'] = passes
-        result['constraint_violations'] = violations
 
     ranked = rank_results(
         results,
